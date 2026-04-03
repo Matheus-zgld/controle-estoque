@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Peças</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .hide-scroll::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+
+<body class="bg-sky-50 text-slate-800 pb-12">
+    <div id="app">
+        <!-- O conteúdo será gerado pelo JavaScript abaixo -->
+        <div class="min-h-screen flex items-center justify-center">
+            <div class="text-center">
+                <div class="inline-block animate-bounce mb-4 text-sky-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+                </div>
+                <p class="text-sky-600 font-bold">Abrindo o caderninho...</p>
+                <p id="status-msg" class="text-xs text-slate-400 mt-2">Validando acesso seguro...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"; import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"; import { getFirestore,
+        collection, doc, onSnapshot, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Configuração segura do ambiente const firebaseConfig = JSON.parse(__firebase_config); const appId = typeof __app_id !==
+        'undefined' ? __app_id : 'controle-pecas-mae'; const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getFirestore(app); let transactions = []; let currentUser = null; const appElement = document.getElementById('app');
+        const statusMsg = document.getElementById('status-msg'); // REGRA 3: Autenticação ANTES de qualquer consulta const initAuth = async () => { try { if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) { await signInWithCustomToken(auth,
+        __initial_auth_token); } else { await signInAnonymously(auth); } } catch (err) { console.error("Erro na autenticação:", err); if (statusMsg) statusMsg.innerText = "Erro ao validar acesso. Tente atualizar a página."; } }; initAuth(); onAuthStateChanged(auth,
+        (user) => { if (user) { currentUser = user; if (statusMsg) statusMsg.innerText = "Sincronizando dados com a nuvem..."; listenData(); } }); function listenData() { // REGRA 1: Caminho obrigatório /artifacts/{appId}/public/data/{collection} const
+        colRef = collection(db, 'artifacts', appId, 'public', 'data', 'movimentacoes'); onSnapshot(colRef, (snapshot) => { transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => { // Ordenação manual para evitar erro de
+        indexação no Firestore const dateA = new Date(a.data).getTime(); const dateB = new Date(b.data).getTime(); if (dateB !== dateA) return dateB - dateA; return (b.timestamp || 0) - (a.timestamp || 0); }); render(); }, (error) => { console.error("Erro
+        no Firestore:", error); if (statusMsg) statusMsg.innerText = "Erro de permissão no banco de dados."; }); } async function handleAdd(tipo) { const qtdInput = document.getElementById('qtd'); const obsInput = document.getElementById('obs'); const
+        dataInput = document.getElementById('data'); const qtd = Number(qtdInput.value); if (!qtd || qtd
+        <=0 || !currentUser) return; const valorFinal=t ipo==='entrada' ? qtd : -qtd; const label=o bsInput.value || (tipo==='entrada' ? 'Produção' : 'Venda'); try { const colRef=c ollection(db, 'artifacts', appId, 'public', 'data', 'movimentacoes'); await addDoc(colRef,
+            { data: dataInput.value, descricao: label, valor: valorFinal, timestamp: Date.now() }); qtdInput.value='' ; obsInput.value='' ; } catch (e) { console.error( "Erro ao salvar:", e); } } window.handleAdd=h andleAdd; window.deleteItem=a sync (id)=>
+            { if (!confirm("Deseja apagar este registro?")) return; const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'movimentacoes', id); await deleteDoc(docRef); }; window.toggleExtras = () => { const el = document.getElementById('extras'); el.classList.toggle('hidden');
+            }; function render() { const total = transactions.reduce((acc, t) => acc + t.valor, 0); const meses = transactions.reduce((acc, t) => { const m = t.data.substring(0, 7); if (!acc[m]) acc[m] = { t: 0, ent: 0, sai: 0 }; acc[m].t += t.valor;
+            if (t.valor > 0) acc[m].ent += t.valor; else acc[m].sai += Math.abs(t.valor); return acc; }, {}); const sortedMeses = Object.keys(meses).sort().reverse(); appElement.innerHTML = `
+            <div class="bg-white rounded-b-[3rem] shadow-sm p-8 mb-6 border-b border-sky-100">
+                <div class="max-w-md mx-auto text-center">
+                    <h1 class="text-2xl font-black text-sky-700 italic flex items-center justify-center gap-2">
+                        Meu Controle de Peças 🌸
+                    </h1>
+                    <div class="mt-8 bg-gradient-to-br from-sky-500 to-indigo-600 rounded-3xl p-8 shadow-xl shadow-sky-200">
+                        <span class="text-sky-100 text-xs font-bold uppercase tracking-widest">Estoque Hoje</span>
+                        <div class="text-6xl font-black text-white mt-2 leading-none">${total}</div>
+                        <p class="text-sky-200 text-sm mt-3 font-medium">peças prontas</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="max-w-md mx-auto px-4 space-y-6">
+                <div class="bg-white p-6 rounded-[2.5rem] shadow-lg border border-sky-50">
+                    <div class="space-y-5">
+                        <div>
+                            <label class="text-[10px] font-black text-slate-400 ml-1 uppercase mb-1 block">Quantidade</label>
+                            <input type="number" id="qtd" inputmode="numeric" placeholder="Ex: 5" class="w-full text-3xl font-bold p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center outline-none focus:border-sky-400">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <button onclick="handleAdd('entrada')" class="bg-emerald-500 text-white p-5 rounded-2xl font-black shadow-lg shadow-emerald-100 active:scale-95 flex flex-col items-center gap-2">
+                                    <i data-lucide="trending-up"></i>FIZ PEÇAS
+                                </button>
+                            <button onclick="handleAdd('saida')" class="bg-rose-500 text-white p-5 rounded-2xl font-black shadow-lg shadow-rose-100 active:scale-95 flex flex-col items-center gap-2">
+                                    <i data-lucide="trending-down"></i>VENDI
+                                </button>
+                        </div>
+                        <button onclick="toggleExtras()" class="w-full text-xs font-bold text-slate-400 uppercase tracking-widest py-2">Opções Extras</button>
+                        <div id="extras" class="hidden space-y-4 pt-4 border-t border-slate-100">
+                            <input type="date" id="data" value="${new Date().toISOString().split('T')[0]}" class="w-full p-4 bg-slate-50 border rounded-xl font-medium">
+                            <input type="text" id="obs" placeholder="Ex: Encomenda Maria" class="w-full p-4 bg-slate-50 border rounded-xl font-medium">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-[2rem] shadow-lg overflow-hidden border border-sky-50">
+                    <div class="p-4 bg-slate-50/50 border-b font-black text-[10px] text-slate-400 tracking-widest uppercase flex items-center gap-2">
+                        <i data-lucide="calendar" size="14"></i> Resumo Mensal
+                    </div>
+                    <div class="divide-y divide-slate-50">
+                        ${sortedMeses.map(m => { const [ano, mesNum] = m.split('-'); const nomeMes = new Date(ano, mesNum - 1).toLocaleDateString('pt-BR', { month: 'long' }); return `
+                        <div class="p-5 flex justify-between items-center">
+                            <div>
+                                <p class="font-bold text-slate-800 capitalize leading-none">${nomeMes} <span class="text-slate-300 font-normal">${ano}</span></p>
+                                <div class="mt-2 flex gap-3 text-[10px] font-bold uppercase tracking-tight">
+                                    <span class="text-emerald-500">Fiz: ${meses[m].ent}</span>
+                                    <span class="text-rose-500">Vendi: ${meses[m].sai}</span>
+                                </div>
+                            </div>
+                            <div class="text-2xl font-black ${meses[m].t >= 0 ? 'text-emerald-500' : 'text-rose-500'}">
+                                ${meses[m].t > 0 ? '+' : ''}${meses[m].t}
+                            </div>
+                        </div>
+                        `; }).join('')}
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-[2rem] shadow-lg overflow-hidden border border-sky-50">
+                    <div class="p-4 bg-slate-50/50 border-b font-black text-[10px] text-slate-400 tracking-widest uppercase flex items-center gap-2">
+                        <i data-lucide="history" size="14"></i> Últimas Ações
+                    </div>
+                    <div class="max-h-72 overflow-y-auto divide-y divide-slate-50">
+                        ${transactions.map(t => `
+                        <div class="p-4 flex items-center justify-between group">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl flex items-center justify-center ${t.valor >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}">
+                                    <i data-lucide="${t.valor >= 0 ? 'plus' : 'minus'}" size="18"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-sm text-slate-700 leading-tight">${t.descricao}</p>
+                                    <p class="text-[10px] text-slate-400 font-medium">${new Date(t.data + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="font-black text-lg ${t.valor >= 0 ? 'text-emerald-500' : 'text-rose-500'}">
+                                            ${t.valor > 0 ? '+' : ''}${t.valor}
+                                        </span>
+                                <button onclick="deleteItem('${t.id}')" class="p-2 text-slate-200 hover:text-rose-400 transition-colors">
+                                            <i data-lucide="trash-2" size="16"></i>
+                                        </button>
+                            </div>
+                        </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div class="text-center opacity-30 flex flex-col items-center gap-1">
+                    <i data-lucide="cloud" size="16"></i>
+                    <p class="text-[9px] font-black uppercase tracking-[0.2em]">Sincronizado na Nuvem</p>
+                </div>
+            </div>
+            `; lucide.createIcons(); }
+    </script>
+</body>
+
+</html>
