@@ -20,25 +20,27 @@
 </head>
 <body class="bg-pink-50 text-slate-800 pb-12">
     <div id="app">
-        <!-- Tela de Carregamento Inicial -->
+        <!-- Tela de Configuração Obrigatória -->
         <div class="min-h-screen flex items-center justify-center p-6 text-center">
-            <div class="flex flex-col items-center max-w-xs">
-                <div id="loader-icon" class="animate-spin text-pink-500 mb-4">
-                    <i data-lucide="loader-2" size="48"></i>
+            <div class="flex flex-col items-center max-w-sm">
+                <div class="w-20 h-20 bg-white rounded-full shadow-lg flex items-center justify-center mb-6 text-pink-500 animate-pulse">
+                    <i data-lucide="cloud-off" size="40"></i>
                 </div>
-                <p id="main-status" class="text-pink-600 font-bold text-lg">Conectando à Nuvem...</p>
-                <p id="sub-status" class="text-pink-300 text-xs mt-2 font-medium">Garantindo que os dados nunca se percam.</p>
+                <h2 class="text-2xl font-black text-pink-600 mb-2">Quase Pronto!</h2>
+                <p class="text-slate-500 text-sm mb-8 leading-relaxed">
+                    Para garantir que os dados <b>nunca sejam apagados</b>, precisamos conectar o seu banco de dados gratuito.
+                </p>
                 
-                <!-- Aviso de Configuração para o Vercel -->
-                <div id="config-alert" class="hidden mt-8 p-6 bg-white rounded-[2rem] border-2 border-rose-100 shadow-xl text-left">
-                    <p class="text-rose-500 font-extrabold text-sm mb-3 uppercase tracking-wider text-center">⚠️ Configuração Necessária</p>
-                    <p class="text-slate-500 text-xs leading-relaxed">
-                        Para o site funcionar no <b>Vercel</b> e salvar na nuvem, você precisa colocar suas chaves do Firebase.
-                    </p>
-                    <div class="mt-4 p-3 bg-slate-50 rounded-xl font-mono text-[10px] text-slate-400 break-all">
-                        No código, procure por: <br><b>const manualConfig = { ... }</b>
-                    </div>
+                <div class="bg-white p-6 rounded-[2rem] shadow-xl border-2 border-pink-100 text-left w-full">
+                    <p class="text-pink-500 font-black text-xs uppercase tracking-widest mb-4">Passo a Passo:</p>
+                    <ol class="text-[11px] text-slate-500 space-y-3 list-decimal ml-4 font-medium">
+                        <li>Crie um projeto grátis no <span class="font-bold text-pink-600">Firebase Console</span>.</li>
+                        <li>Ative o <span class="font-bold text-pink-600">Firestore Database</span> e a <span class="font-bold text-pink-600">Autenticação Anónima</span>.</li>
+                        <li>Copie as chaves do seu "Web App".</li>
+                        <li>Cole no código dentro de <code class="bg-slate-100 px-1 rounded text-pink-700 font-bold">manualConfig</code>.</li>
+                    </ol>
                 </div>
+                <p class="mt-6 text-[10px] text-pink-300 font-bold uppercase tracking-widest animate-bounce">Aguardando chaves no código...</p>
             </div>
         </div>
     </div>
@@ -48,12 +50,9 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, onSnapshot, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const mainStatus = document.getElementById('main-status');
-        const subStatus = document.getElementById('sub-status');
-        const configAlert = document.getElementById('config-alert');
-        const loaderIcon = document.getElementById('loader-icon');
-
-        // --- CONFIGURAÇÃO MANUAL (Cole aqui os dados do seu Firebase Console) ---
+        // ================================================================
+        // 🔑 COLOQUE AS SUAS CHAVES DO FIREBASE AQUI ABAIXO:
+        // ================================================================
         const manualConfig = {
             apiKey: "", 
             authDomain: "",
@@ -62,30 +61,22 @@
             messagingSenderId: "",
             appId: ""
         };
+        // ================================================================
 
-        // Função segura para pegar a configuração
         function getFirebaseConfig() {
             try {
-                // Tenta pegar a config do ambiente ou a manual
                 const envConfig = window['__firebase_config'] || (typeof __firebase_config !== 'undefined' ? __firebase_config : null);
-                if (envConfig) {
-                    return typeof envConfig === 'string' ? JSON.parse(envConfig) : envConfig;
-                }
-            } catch (e) { console.warn("Ambiente automático indisponível."); }
-            
-            // Se não tiver config automática, usa a manual se a apiKey estiver preenchida
+                if (envConfig) return typeof envConfig === 'string' ? JSON.parse(envConfig) : envConfig;
+            } catch (e) {}
             return (manualConfig && manualConfig.apiKey) ? manualConfig : null;
         }
 
-        const firebaseConfig = getFirebaseConfig();
+        const config = getFirebaseConfig();
 
-        if (!firebaseConfig) {
-            mainStatus.innerText = "Nuvem não configurada";
-            subStatus.innerText = "Aguardando as chaves do Google Firebase.";
-            configAlert.classList.remove('hidden');
-            loaderIcon.classList.add('hidden');
+        if (config) {
+            initFirebase(config);
         } else {
-            initFirebase(firebaseConfig);
+            lucide.createIcons();
         }
 
         async function initFirebase(config) {
@@ -93,59 +84,34 @@
                 const app = initializeApp(config);
                 const auth = getAuth(app);
                 const db = getFirestore(app);
-                
-                // Determinar o ID do App
                 const appId = window['__app_id'] || (typeof __app_id !== 'undefined' ? __app_id : 'controle-pecas-mae');
 
-                // Autenticação (REGRA 3)
                 const startAuth = async () => {
                     const token = window['__initial_auth_token'] || (typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null);
-                    if (token) {
-                        await signInWithCustomToken(auth, token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
+                    if (token) await signInWithCustomToken(auth, token);
+                    else await signInAnonymously(auth);
                 };
 
                 onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        mainStatus.innerText = "Acesso Autorizado";
-                        subStatus.innerText = "Buscando seu estoque...";
-                        startSync(db, appId);
-                    }
+                    if (user) startSync(db, appId);
                 });
 
                 await startAuth();
             } catch (err) {
-                console.error("Erro na inicialização:", err);
-                mainStatus.innerText = "Erro de Conexão";
-                subStatus.innerText = "Verifique sua internet ou chaves do Firebase.";
+                console.error("Erro Init:", err);
             }
         }
 
         function startSync(db, appId) {
-            // REGRA 1: Caminho obrigatório
             const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'movimentacoes');
-            
             onSnapshot(colRef, (snapshot) => {
                 const transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 render(transactions, db, appId);
-            }, (error) => {
-                console.error("Erro Firestore:", error);
-                mainStatus.innerText = "Acesso Negado";
-                subStatus.innerText = "O banco de dados recusou a conexão.";
             });
         }
 
         function render(transactions, db, appId) {
-            // Ordenação manual por data e depois por timestamp de criação
-            const sorted = [...transactions].sort((a, b) => {
-                const dateA = new Date(a.data).getTime();
-                const dateB = new Date(b.data).getTime();
-                if (dateB !== dateA) return dateB - dateA;
-                return (b.timestamp || 0) - (a.timestamp || 0);
-            });
-
+            const sorted = [...transactions].sort((a, b) => new Date(b.data) - new Date(a.data) || b.timestamp - a.timestamp);
             const total = sorted.reduce((acc, t) => acc + t.valor, 0);
             
             const mesesMap = sorted.reduce((acc, t) => {
@@ -158,31 +124,25 @@
             }, {});
             const listaMeses = Object.keys(mesesMap).sort().reverse();
 
-            // Exportar funções para o window
             window.handleAdd = async (tipo) => {
                 const qtdElement = document.getElementById('qtd');
                 const obsElement = document.getElementById('obs');
                 const dataElement = document.getElementById('data');
-                
                 const qtd = Number(qtdElement.value);
                 if (!qtd || qtd <= 0) return;
 
-                const novoItem = {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'movimentacoes'), {
                     data: dataElement.value,
                     descricao: obsElement.value || (tipo === 'entrada' ? 'Produção' : 'Venda'),
                     valor: tipo === 'entrada' ? qtd : -qtd,
                     timestamp: Date.now()
-                };
-
-                try {
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'movimentacoes'), novoItem);
-                    qtdElement.value = '';
-                    obsElement.value = '';
-                } catch (e) { alert("Erro ao salvar! Verifique a internet."); }
+                });
+                qtdElement.value = '';
+                obsElement.value = '';
             };
 
             window.deleteItem = async (id) => {
-                if (confirm("Deseja apagar este registro da nuvem para sempre?")) {
+                if (confirm("Apagar registro da nuvem?")) {
                     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'movimentacoes', id));
                 }
             };
@@ -190,34 +150,23 @@
             window.toggleExtras = () => document.getElementById('extras').classList.toggle('hidden');
 
             document.getElementById('app').innerHTML = `
-                <div class="pink-gradient rounded-b-[3.5rem] p-10 shadow-xl mb-6 text-center text-white relative overflow-hidden">
-                    <h1 class="text-lg font-bold opacity-80 mb-6 flex items-center justify-center gap-2">
-                         Caderno de Peças 🌸
+                <div class="pink-gradient rounded-b-[3.5rem] p-10 shadow-xl mb-6 text-center text-white relative overflow-hidden animate-in">
+                    <h1 class="text-lg font-bold opacity-80 mb-6 flex items-center justify-center gap-2 italic">
+                         Controle de Peças da Mamãe 🌸
                     </h1>
-                    <span class="text-[10px] font-black uppercase tracking-[0.3em] opacity-60 italic">Total na Nuvem</span>
+                    <span class="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">Total em Stock</span>
                     <div class="text-7xl font-black mt-2 leading-none drop-shadow-md">${total}</div>
                 </div>
 
                 <div class="max-w-md mx-auto px-5 space-y-6 animate-in">
-                    <!-- Cadastro -->
                     <div class="bg-white p-7 rounded-[2.5rem] shadow-lg border border-pink-100">
                         <div class="space-y-5">
-                            <div>
-                                <label class="text-[10px] font-black text-pink-300 ml-1 uppercase mb-2 block tracking-widest text-center">Quantas Peças?</label>
-                                <input type="number" id="qtd" inputmode="numeric" placeholder="0" class="w-full text-5xl font-black p-6 bg-pink-50/50 border-2 border-pink-100 rounded-3xl text-center outline-none focus:border-pink-400 text-pink-600 placeholder:text-pink-100">
-                            </div>
-                            
+                            <input type="number" id="qtd" inputmode="numeric" placeholder="Quantas?" class="w-full text-5xl font-black p-6 bg-pink-50/50 border-2 border-pink-100 rounded-3xl text-center outline-none focus:border-pink-400 text-pink-600 placeholder:text-pink-100 transition-all">
                             <div class="grid grid-cols-2 gap-4">
-                                <button onclick="handleAdd('entrada')" class="bg-emerald-500 text-white p-6 rounded-3xl font-black shadow-lg flex flex-col items-center gap-2 active:scale-95 transition-transform">
-                                    <i data-lucide="plus-circle" size="28"></i> FIZ PEÇAS
-                                </button>
-                                <button onclick="handleAdd('saida')" class="bg-rose-500 text-white p-6 rounded-3xl font-black shadow-lg flex flex-col items-center gap-2 active:scale-95 transition-transform">
-                                    <i data-lucide="shopping-cart" size="28"></i> VENDI
-                                </button>
+                                <button onclick="handleAdd('entrada')" class="bg-emerald-500 text-white p-6 rounded-3xl font-black shadow-lg flex flex-col items-center gap-2 active:scale-95 transition-transform"><i data-lucide="plus-circle" size="28"></i> FIZ PEÇAS</button>
+                                <button onclick="handleAdd('saida')" class="bg-rose-500 text-white p-6 rounded-3xl font-black shadow-lg flex flex-col items-center gap-2 active:scale-95 transition-transform"><i data-lucide="shopping-cart" size="28"></i> VENDI</button>
                             </div>
-
-                            <button onclick="toggleExtras()" class="w-full py-2 text-[10px] font-black text-pink-200 uppercase tracking-widest">Alterar Data ou Descrição</button>
-                            
+                            <button onclick="toggleExtras()" class="w-full text-[10px] font-black text-pink-200 uppercase tracking-widest">Mudar Data / Detalhes</button>
                             <div id="extras" class="hidden space-y-4 pt-4 border-t border-pink-50">
                                 <input type="date" id="data" value="${new Date().toISOString().split('T')[0]}" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
                                 <input type="text" id="obs" placeholder="Ex: Encomenda Maria" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
@@ -225,49 +174,31 @@
                         </div>
                     </div>
 
-                    <!-- Resumo Mensal -->
                     <div class="bg-white rounded-[2.5rem] shadow-md overflow-hidden border border-pink-100">
-                        <div class="p-5 bg-pink-50/30 border-b font-black text-[10px] text-pink-300 tracking-widest uppercase flex items-center gap-2">
-                            <i data-lucide="calendar-days" size="14"></i> Resumo Mensal
-                        </div>
+                        <div class="p-5 bg-pink-50/30 border-b font-black text-[10px] text-pink-300 tracking-widest uppercase">Resumo Mensal</div>
                         <div class="divide-y divide-pink-50">
-                            ${listaMeses.map(m => {
-                                const [ano, mes] = m.split('-');
-                                const nomeMes = new Date(ano, mes - 1).toLocaleDateString('pt-BR', { month: 'long' });
-                                return `
-                                    <div class="p-6 flex justify-between items-center hover:bg-pink-50/20 transition-colors">
-                                        <div>
-                                            <p class="font-black text-slate-700 capitalize text-lg leading-none mb-1">${nomeMes} <span class="text-slate-300 font-normal text-sm">${ano}</span></p>
-                                            <div class="flex gap-3 text-[9px] font-black uppercase tracking-tighter">
-                                                <span class="text-emerald-500">Produção: ${mesesMap[m].e}</span>
-                                                <span class="text-pink-500">Vendas: ${mesesMap[m].s}</span>
-                                            </div>
-                                        </div>
-                                        <div class="text-2xl font-black ${mesesMap[m].t >= 0 ? 'text-emerald-500' : 'text-pink-500'}">
-                                            ${mesesMap[m].t > 0 ? '+' : ''}${mesesMap[m].t}
-                                        </div>
+                            ${listaMeses.map(m => `
+                                <div class="p-6 flex justify-between items-center">
+                                    <div>
+                                        <p class="font-black text-slate-700 capitalize text-lg leading-none mb-1">${new Date(m + '-02').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
+                                        <p class="text-[9px] font-black text-pink-300">ENTROU: ${mesesMap[m].e} | SAIU: ${mesesMap[m].s}</p>
                                     </div>
-                                `;
-                            }).join('')}
-                            ${listaMeses.length === 0 ? '<p class="p-10 text-center text-pink-200 text-xs italic">Nada registrado ainda.</p>' : ''}
+                                    <div class="text-2xl font-black ${mesesMap[m].t >= 0 ? 'text-emerald-500' : 'text-pink-500'}">${mesesMap[m].t > 0 ? '+' : ''}${mesesMap[m].t}</div>
+                                </div>
+                            `).join('')}
                         </div>
                     </div>
 
-                    <!-- Histórico -->
                     <div class="bg-white rounded-[2.5rem] shadow-md overflow-hidden border border-pink-100">
-                        <div class="p-5 bg-pink-50/30 border-b font-black text-[10px] text-pink-300 tracking-widest uppercase flex items-center gap-2">
-                            <i data-lucide="history" size="14"></i> Histórico Recente
-                        </div>
+                        <div class="p-5 bg-pink-50/30 border-b font-black text-[10px] text-pink-300 tracking-widest uppercase">Histórico Recente</div>
                         <div class="max-h-80 overflow-y-auto divide-y divide-pink-50">
                             ${sorted.map(t => `
-                                <div class="p-5 flex items-center justify-between group transition-colors hover:bg-pink-50/10">
+                                <div class="p-5 flex items-center justify-between group">
                                     <div class="flex items-center gap-4">
-                                        <div class="w-10 h-10 rounded-2xl flex items-center justify-center ${t.valor >= 0 ? 'bg-emerald-50 text-emerald-500' : 'bg-pink-50 text-pink-500'}">
-                                            <i data-lucide="${t.valor >= 0 ? 'plus' : 'minus'}" size="20"></i>
-                                        </div>
+                                        <div class="w-10 h-10 rounded-2xl flex items-center justify-center ${t.valor >= 0 ? 'bg-emerald-50 text-emerald-500' : 'bg-pink-50 text-pink-500'}"><i data-lucide="${t.valor >= 0 ? 'plus' : 'minus'}" size="20"></i></div>
                                         <div>
                                             <p class="font-bold text-slate-700 text-sm leading-tight">${t.descricao}</p>
-                                            <p class="text-[10px] text-slate-400 font-medium">${new Date(t.data + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                                            <p class="text-[10px] text-slate-400">${new Date(t.data + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-3">
@@ -281,9 +212,8 @@
 
                     <div class="flex flex-col items-center gap-2 py-6">
                         <div class="flex items-center gap-2 px-5 py-2 bg-emerald-50 text-emerald-500 rounded-full text-[9px] font-black uppercase tracking-[0.2em]">
-                            <i data-lucide="shield-check" size="14"></i> Nuvem Google Ativa
+                            <i data-lucide="shield-check" size="14"></i> Stock Seguro na Nuvem Google
                         </div>
-                        <p class="text-[8px] text-pink-200 uppercase font-bold tracking-widest text-center px-10 leading-relaxed italic">Os dados da mamãe estão seguros e nunca serão apagados pelo histórico do navegador.</p>
                     </div>
                 </div>
             `;
